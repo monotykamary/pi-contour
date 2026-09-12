@@ -1,8 +1,8 @@
 {
-  "staticBytes": 7840,
+  "staticBytes": 8081,
   "staticFiles": [
-    "dist/chunk-EV76L6DR.mjs",
     "dist/chunk-HXQEELCN.mjs",
+    "dist/chunk-P55ITQAZ.mjs",
     "dist/index.mjs"
   ],
   "analysis": "lazy-import",

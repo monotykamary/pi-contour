@@ -79,14 +79,14 @@ Reports preserve source mass, total transported mass, boundary exposure, nearby 
 Following the metric family discussed in [Earendil's article](https://earendil.com/posts/measuring-code-sloppiness/) and [SlopCodeBench](https://arxiv.org/html/2603.24755v1):
 
 $$
-m(f)=\operatorname{CC}(f)\sqrt{\operatorname{SLOC}(f)},\qquad
-E=\frac{\sum_{f:\operatorname{CC}(f)>10}m(f)}{\sum_f m(f)}.
+m(f)=\mathrm{CC}(f)\sqrt{\mathrm{SLOC}(f)},\qquad
+E=\frac{\sum_{f:\mathrm{CC}(f)>10}m(f)}{\sum_f m(f)}.
 $$
 
 For flagged syntax lines $A$ and exact-token clone lines $C$:
 
 $$
-V=\frac{|A\cup C|}{\operatorname{SLOC}}.
+V=\frac{|A\cup C|}{\mathrm{SLOC}}.
 $$
 
 Zero denominators produce zero, not undefined values. Contour reports the numerators and absolute totals alongside these ratios. Its small JS/TS rule set is **not a reproduction of the benchmark's entire methodology or calibration**.

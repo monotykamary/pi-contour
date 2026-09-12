@@ -105,6 +105,36 @@ contour review --root /path/to/repo --max-tokens 1000
 
 Review never checks out files, stages changes, executes repository code, commits, or runs tests. There is no atomic lock on an external editor or a later commit: every report identifies the snapshot it actually analyzed.
 
+### Reading a checkpoint
+
+The `contour-review` message uses the same compact text renderer as the tool, CLI, and optional hook. It is still an **explicit checkpoint**, not an automatic edit-by-edit sync.
+
+| Mark | Meaning |
+|---|---|
+| `Δ` | Structural finding, metric delta, or regional change |
+| `▪` | Source witness: file, line, and any recorded relationship |
+| `↗` | Modeled diffusion exposure—not severity or evidence of a defect |
+| `?` | Review question, not a rewrite instruction |
+| `⚠` | Incomplete coverage; baseline/target gaps are labeled separately |
+
+An abridged, illustrative report:
+
+```text
+Contour · staged · <HEAD> → <snapshot>
+Δ SLOC +18; decisions +4; erosion 0.120 → 0.180; verbosity 0.040 → 0.040
+
+Δ [complexity; advisory] parse: decision load increased
+  ▪ src/parser.ts:42
+  8 → 12 decisions (CC = decisions + 1)
+  ↗ Exposure (modeled): t=0.5: 2.0% outside source region; t=2: 8.0% outside source region
+  ? Is this additional branching required, or can responsibilities be separated without merely distributing the same decisions?
+
+⚠ Coverage incomplete; absence of findings is not approval.
+⚠ Gap (target): worker/job.py — Unsupported language: .py
+```
+
+Full reports retain snapshot identities, policy/coverage counts, absolute totals, omitted-finding counts, and the reminder that heat is exposure—not defect probability. Symbols add hierarchy, not new scoring or automatic actions. `--json` remains structured data without presentation glyphs.
+
 ## What a finding means
 
 | Signal | Visible evidence | Question, not verdict |

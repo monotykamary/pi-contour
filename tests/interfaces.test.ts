@@ -31,14 +31,17 @@ describe("public interfaces", () => {
     const tool = api.registerTool.mock.calls[0]![0] as ToolDefinition;
     const ctx = { cwd: root, hasUI: false } as ExtensionContext;
     const result = await tool.execute("call", { target: "staged", maxTokens: 512 }, undefined, undefined, ctx);
-    expect(result.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("complexity") });
+    expect(result.content[0]).toMatchObject({ type: "text", text: expect.stringContaining("Δ [complexity; advisory]") });
+    const text = (result.content[0] as { text: string }).text;
+    for (const marker of ["  ▪ a.ts:", "  ↗ Exposure (modeled):", "  ? "]) expect(text).toContain(marker);
     const command = api.registerCommand.mock.calls[0]![1]; await command.handler("review staged", ctx);
-    expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: "contour-review", display: true }), { triggerTurn: false });
+    expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: "contour-review", display: true,
+      content: expect.stringContaining("Δ [complexity; advisory]") }), { triggerTurn: false });
   });
   it("supports CLI text/JSON, default advisory behavior, explicit policy, and stable checkpoint suppression", async () => {
     const root = await repo({ "core/a.ts": "export const a = 1;", "ui/b.ts": "export const b = 2;" });
     await put(root, "core/a.ts", "import { b } from '../ui/b'; export const a = b;"); await git(root, ["add", "."]);
-    const first = output(); expect(await main(["review", "--root", root, "--checkpoint"], first.io)).toBe(0); expect(first.values.out).toContain("coupling");
+    const first = output(); expect(await main(["review", "--root", root, "--checkpoint"], first.io)).toBe(0); expect(first.values.out).toContain("Δ [coupling; advisory]"); expect(first.values.out).toContain("  ▪ core/a.ts:");
     const second = output(); expect(await main(["review", "--root", root, "--checkpoint"], second.io)).toBe(0); expect(second.values.out).toBe("");
     const explicit = output(); expect(await main(["review", "--root", root, "--json"], explicit.io)).toBe(0);
     expect(JSON.parse(explicit.values.out)).toMatchObject({ schemaVersion: 1, target: "staged", blockingFindings: 0 });

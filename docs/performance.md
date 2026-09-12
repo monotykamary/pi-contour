@@ -17,7 +17,7 @@ The executable acceptance criteria are work counts, not brittle timing assertion
 
 ## Startup is a separate budget
 
-The released interface's complete static bundle graph is **7,840 bytes**, excluding Pi's supplied TypeBox and loader. Build metadata guards against any static parser, Fovea, or analysis-engine import; a 32KiB ceiling makes regressions explicit.
+The v0.1.1 interface's complete static bundle graph measured **7,840 bytes**, excluding Pi's supplied TypeBox and loader. Build metadata guards against any static parser, Fovea, or analysis-engine import; a 32KiB ceiling makes regressions explicit.
 
 An isolated package probe with Pi 0.85.1 and Node 26.5.0 measured `session_start` at **0.038–0.041ms**. The full `DefaultResourceLoader.reload()` path, including package/resource discovery and Jiti loading, took **64–127ms**. These are local observations, not a latency guarantee or a measurement of Contour alone versus a baseline Pi startup.
 
