@@ -1,0 +1,4 @@
+# Generated dependencies preserve upstream/template whitespace.
+dist/*.mjs linguist-generated=true -whitespace
+dist/THIRD_PARTY_LICENSES.txt linguist-generated=true -whitespace
+media/cover.svg linguist-generated=true

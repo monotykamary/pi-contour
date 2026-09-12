@@ -1,0 +1,43 @@
+{
+  "name": "pi-contour",
+  "version": "0.1.0",
+  "description": "Evidence-first structural review of code changes, powered by Fovea's heat-diffusion substrate.",
+  "type": "module",
+  "license": "MIT",
+  "author": "monotykamary",
+  "repository": { "type": "git", "url": "git+https://github.com/monotykamary/pi-contour.git" },
+  "homepage": "https://github.com/monotykamary/pi-contour#readme",
+  "bugs": "https://github.com/monotykamary/pi-contour/issues",
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
+  "keywords": ["pi-package", "pi-extension", "code-review", "heat-diffusion"],
+  "pi": { "extensions": ["./dist/index.mjs"], "skills": ["./skills"], "image": "https://raw.githubusercontent.com/monotykamary/pi-contour/main/media/cover.svg" },
+  "bin": { "contour": "dist/cli.mjs" },
+  "files": ["dist", "skills", "README.md", "LICENSE", "docs", "media"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint:dead": "knip",
+    "check": "bun run typecheck && bun run test && bun run lint:dead",
+    "build": "tsx scripts/build.ts",
+    "bench": "tsx scripts/bench.ts",
+    "cover": "tsx scripts/cover.ts",
+    "verify:package": "tsx scripts/verify-package.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "prepack": "bun run build",
+    "contour": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.1",
+    "knip": "^6.32.0",
+    "pi-fovea": "0.26.0",
+    "tsx": "^4.19.0",
+    "typebox": "^1.3.10",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": { "typebox": "*" },
+  "peerDependenciesMeta": { "typebox": { "optional": true } }
+}
