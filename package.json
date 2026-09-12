@@ -1,6 +1,6 @@
 {
   "name": "pi-contour",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Evidence-first structural review of code changes, powered by Fovea's heat-diffusion substrate.",
   "type": "module",
   "license": "MIT",
@@ -11,7 +11,7 @@
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
   "keywords": ["pi-package", "pi-extension", "code-review", "heat-diffusion"],
-  "pi": { "extensions": ["./dist/index.mjs"], "skills": ["./skills"], "image": "https://raw.githubusercontent.com/monotykamary/pi-contour/main/media/cover.svg" },
+  "pi": { "extensions": ["./dist/index.mjs"], "skills": ["./skills"], "image": "https://raw.githubusercontent.com/monotykamary/pi-contour/main/media/preview.png" },
   "bin": { "contour": "dist/cli.mjs" },
   "files": ["dist", "skills", "README.md", "LICENSE", "docs", "media"],
   "scripts": {
