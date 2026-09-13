@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { DefaultResourceLoader, SettingsManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { DefaultResourceLoader, SettingsManager, SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const exec = promisify(execFile);
 const project = fileURLToPath(new URL("../", import.meta.url));
@@ -54,7 +54,7 @@ try {
     const cli = JSON.parse((await run(process.execPath, [join(installed, "dist/cli.mjs"), "review", "--root", repository, "--json"], directory)).stdout);
     assert.equal(cli.after.decisions, 12); assert.equal(cli.target, "staged");
     const loader = new DefaultResourceLoader({
-      cwd: repository, agentDir: join(root, `agent-${mode}`), settingsManager: SettingsManager.inMemory(),
+      cwd: directory, agentDir: join(root, `agent-${mode}`), settingsManager: SettingsManager.inMemory(),
       additionalExtensionPaths: [installed], noExtensions: true, noSkills: true,
       noPromptTemplates: true, noThemes: true, noContextFiles: true,
     });
@@ -63,17 +63,28 @@ try {
     const extension = loaded.extensions[0]!;
     assert.deepEqual([...extension.tools.keys()], ["contour_review"]);
     assert.deepEqual([...extension.commands.keys()], ["contour"]);
-    const context = { cwd: repository, hasUI: false } as ExtensionContext;
+    const session = SessionManager.inMemory(directory);
+    loaded.runtime.appendEntry = (customType, data) => { session.appendCustomEntry(customType, data); };
+    loaded.runtime.sendMessage = () => { throw new Error("Discovery must not send messages"); };
+    const context = { cwd: directory, hasUI: false, sessionManager: session as ExtensionContext["sessionManager"] } as ExtensionContext;
     const start = performance.now();
     for (const handler of extension.handlers.get("session_start") ?? []) await handler({ type: "session_start" }, context);
     const sessionStartMs = performance.now() - start;
     try {
+      await assert.rejects(extension.tools.get("contour_review")!.definition.execute("unselected", {}, undefined, undefined, context), /Git worktree/);
+      assert.equal(session.getBranch().length, 0);
+      for (const handler of extension.handlers.get("tool_result") ?? []) await handler({
+        type: "tool_result", toolName: "read", toolCallId: "access", input: { path: join(repository, "a.ts") },
+        content: [], details: undefined, isError: false,
+      }, context);
+      assert.ok(session.getBranch().some(entry => entry.type === "custom" && entry.customType === "pi-contour-workspace"));
       const result = await extension.tools.get("contour_review")!.definition.execute("package-probe", { target: "staged" }, undefined, undefined, context);
       assert.ok(result.content.some(content => content.type === "text" && content.text.includes("complexity")));
+      assert.equal((result.details as { root: string }).root, await realpath(repository));
     } finally {
       for (const handler of extension.handlers.get("session_shutdown") ?? []) await handler({ type: "session_shutdown" }, context);
     }
-    observations.push({ mode, cli: true, piLoader: true, lazyToolReview: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
+    observations.push({ mode, cli: true, piLoader: true, lazyToolReview: true, disjointAutoSelection: true, sessionPersistence: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
   }
   console.log(JSON.stringify({ standalone: true, archiveFiles: packed.files.length, installed: observations }));
 } finally {

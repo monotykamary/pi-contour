@@ -51,9 +51,11 @@ Installing the CLI globally does not register a Pi extension; `pi install` does 
    └────────────────────┘            └────────────────────────┘
 ```
 
-**Continuous discovery. Checkpoint disclosure.** A quiet observer debounces tool activity (400ms) and polls the working tree (5s), so editor saves, shell edits, and nested tool mutations do not depend on recognizing a tool name. Nothing is injected into the conversation, no notification is shown, and no automatic agent continuation occurs during discovery.
+**Continuous discovery. Checkpoint disclosure.** Successful native/Fabric `pi.*` path access selects a project—even when your Pi cwd is a parent folder or an unrelated launcher. A 32-root recency ring retires the least recently used project on overflow. Root-local Git comparisons never merge unrelated projects merely because they share a parent. Fovea and Contour exchange session-qualified target hints when both are loaded.
 
-Startup registers only the interface and an unref'ed timer. The parser, substrate, and engine are lazy-imported at the first deferred scan or explicit review—not during extension loading or `session_start`. Reload/shutdown cancels work and releases timers. For entirely on-demand analysis:
+A quiet observer debounces successful activity (400ms), alternating recent projects with a round-robin backstop on a 5s scheduling tick. It scans **one root per pass**; 5s is not a per-project guarantee at 32 roots. Once enrolled, editor saves and opaque shell changes are still found by polling. Explicit checkpoints take priority and abort speculative work. Discovery never injects findings, shows notifications, or restarts an agent.
+
+Startup registers the lightweight workspace interface and an unref'ed timer; an empty coordinator never scans cwd. The parser, numerical substrate, and engine load at the first enrolled-project scan or explicit review—not during extension loading or `session_start`. Branch-local root metadata survives compaction/reload/resume; old analysis does not. Reload/shutdown cancels obsolete work. For entirely on-demand analysis:
 
 ```sh
 CONTOUR_BACKGROUND=0 pi
@@ -76,6 +78,10 @@ Caches under `$TMPDIR/pi-contour-<uid>/` contain local source-derived metadata, 
 
 </details>
 
+Set `CONTOUR_MAX_ROOTS` to lower the default/cap of 32. Reports label the canonical worktree; `agentOrigin` records the launcher separately. Symlink aliases unify, linked worktrees stay distinct. Native paths remain cwd-relative and no extension changes cwd. Use explicit roots for parallel work.
+
+Enrollment follows successful structured/literal access, never blocked calls or guessed program output. It expands analysis to the containing project, not a per-file sandbox or a trust grant. Automatic discovery excludes broad/private/dependency paths. Analysis Git commands disable fsmonitor and remote/lazy fetching. Non-Git projects report review unavailable instead of silently reviewing the previous repository. Re-entry does not certify an inactive interval.
+
 ## Review a patch
 
 In Pi:
@@ -83,12 +89,14 @@ In Pi:
 ```text
 /contour review
 /contour review working-tree
+/contour review staged --root "/projects/service"
 ```
 
 For the agent:
 
 ```ts
-contour_review({ target: "staged" })
+contour_review({ target: "staged" }) // most recently selected project
+contour_review({ root: "/projects/service", target: "working-tree" })
 contour_review({ target: "working-tree", maxTokens: 2500, maxFindings: 8 })
 ```
 

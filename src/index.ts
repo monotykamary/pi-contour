@@ -1,10 +1,19 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { ExecutionRoots, ProjectDiscovery, accessedPaths, WORKSPACE_ACCESS_EVENT, peerWorkspaceRoot, latestWorkspaceEntry, envInt } from "pi-fovea/workspace";
 import type { ContourEngine } from "./core/engine.js";
+import type { AnalysisOptions, Target } from "./core/types.js";
 import { SilentObserver } from "./core/background.js";
 import { renderReport } from "./core/render.js";
 
 export default function contour(pi: ExtensionAPI): void {
+  const roots = new ExecutionRoots(envInt("CONTOUR_MAX_ROOTS", 32, 1, 32));
+  const discovery = new ProjectDiscovery();
+  const dirty = new Set<string>(), errors = new Map<string, string>();
+  const checkpoints = new Set<{ root: string; controller: AbortController }>();
+  let epoch = 0, savedRevision = -1, cursor = 0, preferDirty = true;
+  let activeScan: string | undefined, unsubscribe: (() => void) | undefined;
+  let selection: Promise<unknown> = Promise.resolve();
   let engine: Promise<ContourEngine> | undefined;
   const getEngine = (): Promise<ContourEngine> => {
     if (!engine) {
@@ -15,27 +24,134 @@ export default function contour(pi: ExtensionAPI): void {
     return engine;
   };
   let observer: SilentObserver | undefined;
-  pi.on("session_start", async (_event, ctx) => {
-    await observer?.stop();
-    engine = undefined;
-    observer = new SilentObserver(async signal => {
-      signal.throwIfAborted();
-      const current = await getEngine();
-      signal.throwIfAborted();
-      return current.review(ctx.cwd, "working-tree", {}, signal);
+  const persistRoots = (force = false): void => {
+    if (!force && savedRevision === roots.revision) return;
+    pi.appendEntry?.("pi-contour-workspace", roots.snapshot()); savedRevision = roots.revision;
+  };
+  const selectRoot = (input: string | undefined, ctx: ExtensionContext, peer = false, requireGit = false): Promise<string> => {
+    const generation = epoch;
+    const task = selection.catch(() => {}).then(async () => {
+      if (epoch !== generation) throw new Error("Contour session changed during root selection");
+      const requested = roots.target(ctx.cwd, input);
+      const project = await discovery.discover(ctx.cwd, requested);
+      if (epoch !== generation) throw new Error("Contour session changed during root discovery");
+      if (requireGit && !project?.git) throw new Error(`Contour needs a Git worktree: ${requested}. Access a project file or pass root explicitly.`);
+      const root = project?.root ?? requested;
+      const change = roots.bind(root);
+      if (change.evicted) {
+        dirty.delete(change.evicted); errors.delete(change.evicted);
+        for (const checkpoint of checkpoints) if (checkpoint.root === change.evicted) checkpoint.controller.abort(new Error("Contour root retired during review"));
+      }
+      dirty.add(root); persistRoots();
+      if (!peer) pi.events?.emit(WORKSPACE_ACCESS_EVENT, { version: 1, source: "contour", root, sessionId: ctx.sessionManager?.getSessionId() });
+      return root;
     });
-    // No parser import, Git process, scan, or awaited analysis on Pi startup.
-    // Discovery begins on the first poll or post-start tool activity.
-    if (process.env.CONTOUR_BACKGROUND !== "0") observer.start(false);
+    selection = task; return task;
+  };
+  const startObserver = (): void => { if (process.env.CONTOUR_BACKGROUND !== "0") observer?.start(false); };
+  const restore = async (ctx: ExtensionContext, empty = false): Promise<void> => {
+    epoch++; selection = Promise.resolve();
+    for (const checkpoint of checkpoints) checkpoint.controller.abort(new Error("Contour session changed"));
+    checkpoints.clear();
+    await observer?.stop(); engine = undefined;
+    discovery.clear(); dirty.clear(); errors.clear(); activeScan = undefined; cursor = 0; preferDirty = true;
+    roots.restore(empty ? undefined : latestWorkspaceEntry(ctx.sessionManager?.getBranch?.() ?? [], "pi-contour-workspace"));
+    savedRevision = roots.revision;
+    observer = new SilentObserver(async signal => {
+      const targets = roots.list();
+      if (!targets.length) return;
+      // Alternate recent activity with a round-robin backstop: a busy root
+      // cannot starve quieter projects indefinitely. One root per pass.
+      const root = (preferDirty ? dirty.values().next().value : undefined) ?? targets[cursor++ % targets.length]!;
+      preferDirty = !preferDirty;
+      dirty.delete(root);
+      const generation = epoch, lease = roots.lease(root);
+      const current = () => generation === epoch && roots.lease(root) === lease;
+      activeScan = root;
+      try {
+        const project = await discovery.discover(root, root, true);
+        if (!project || project.root !== root) { if (current()) errors.set(root, "No Git worktree: structural patch review unavailable"); return; }
+        signal.throwIfAborted();
+        if (!current()) return;
+        const report = await (await getEngine()).review(root, "working-tree", {}, signal);
+        if (report.root !== root) throw new Error("Git resolved outside the selected worktree");
+        if (current()) errors.delete(root);
+      } catch (error) {
+        if (current() && !signal.aborted) errors.set(root, error instanceof Error ? error.message : String(error));
+      } finally { if (current() && activeScan === root) activeScan = undefined; }
+    });
+    startObserver();
+  };
+  const subscribe = (ctx: ExtensionContext): void => {
+    unsubscribe = pi.events?.on(WORKSPACE_ACCESS_EVENT, data => {
+      const root = peerWorkspaceRoot(data, ctx.sessionManager?.getSessionId(), "contour");
+      if (root) void selectRoot(root, ctx, true).then(() => observer?.wake(false), () => {});
+    });
+  };
+  pi.on("session_start", async (_event, ctx) => {
+    unsubscribe?.(); unsubscribe = undefined; await restore(ctx); subscribe(ctx);
   });
-  pi.on("session_shutdown", async () => { await observer?.stop(); observer = undefined; engine = undefined; });
-  pi.on("tool_result", event => { if (event.toolName !== "contour_review") observer?.wake(); });
+  pi.on("session_tree", async (_event, ctx) => {
+    unsubscribe?.(); unsubscribe = undefined; await restore(ctx); subscribe(ctx);
+  });
+  pi.on("session_compact", () => persistRoots(true));
+  pi.on("session_shutdown", async () => {
+    epoch++; unsubscribe?.(); unsubscribe = undefined;
+    for (const checkpoint of checkpoints) checkpoint.controller.abort(new Error("Contour session shut down"));
+    checkpoints.clear();
+    await observer?.stop(); observer = undefined; engine = undefined;
+    roots.clear(); dirty.clear(); errors.clear(); discovery.clear();
+  });
+  pi.on("tool_result", async (event, ctx) => {
+    if (event.isError) return;
+    const generation = epoch;
+    for (const path of accessedPaths(event.toolName, event.input, ctx.cwd)) {
+      const project = await discovery.discover(ctx.cwd, path);
+      if (!project || generation !== epoch) continue;
+      try {
+        const root = await selectRoot(project.root, ctx);
+        observer?.wake((event.toolName === "edit" || event.toolName === "write") && activeScan === root);
+      } catch { /* Completed native tools must not fail because analysis is unavailable. */ }
+    }
+  });
+
+  const review = async (ctx: ExtensionContext, root: string | undefined, target: Target, options: Partial<AnalysisOptions> = {}, signal?: AbortSignal) => {
+    const generation = epoch;
+    const selected = await selectRoot(root, ctx, false, true);
+    const lease = roots.lease(selected), heldObserver = observer;
+    const checkpoint = { root: selected, controller: new AbortController() };
+    checkpoints.add(checkpoint);
+    const abort = () => checkpoint.controller.abort(signal?.reason);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    const current = () => epoch === generation && roots.lease(selected) === lease;
+    try {
+      // An explicit checkpoint takes priority over speculative background work.
+      await heldObserver?.stop();
+      checkpoint.controller.signal.throwIfAborted();
+      if (!current()) throw new Error("Contour workspace changed during review");
+      const project = await discovery.discover(selected, selected, true);
+      if (!project || project.root !== selected) throw new Error(`Contour needs a Git worktree: ${selected}. Access a project file or pass root explicitly.`);
+      checkpoint.controller.signal.throwIfAborted();
+      if (!current()) throw new Error("Contour workspace changed during review");
+      const report = await (await getEngine()).review(selected, target, options, checkpoint.controller.signal);
+      if (!current()) throw new Error("Contour workspace changed during review; retry with an explicit root");
+      if (report.root !== selected) throw new Error("Git resolved outside the selected worktree");
+      dirty.delete(selected); errors.delete(selected);
+      return report;
+    } finally {
+      checkpoints.delete(checkpoint); signal?.removeEventListener("abort", abort);
+      if (epoch === generation && observer === heldObserver && !checkpoints.size) startObserver();
+    }
+  };
 
   pi.registerTool({
     name: "contour_review", label: "Contour review",
-    description: "Review HEAD against the staged patch (default) or working tree, including non-ignored untracked sources. Returns bounded structural-change evidence and multiscale exposure, not a quality score or correctness approval. Read-only; no edits or commits. JS/TS metrics in v0.1; coverage gaps are explicit. Budget estimate: 4 characters per token.",
+    description: "Review HEAD against the staged patch (default) or working tree. Uses the most recently accessed project; root explicitly selects a Git project anywhere. Root and agent origin are reported separately. Bounded structural evidence and multiscale exposure, not a quality score or correctness approval. Read-only; JS/TS metrics, explicit coverage gaps. Budget estimate: 4 characters/token.",
     promptSnippet: "Evidence-first structural review of a coherent patch",
+    promptGuidelines: ["contour_review follows successful project access; pass root explicitly for parallel or ambiguous multi-project checkpoints."],
     parameters: Type.Object({
+      root: Type.Optional(Type.String({ description: "Project path, absolute or relative to the invoking tool context. Omitted uses the most recently accessed project." })),
       target: Type.Optional(Type.String({ enum: ["staged", "working-tree"], description: "staged compares HEAD to the index, never live worktree content" })),
       maxTokens: Type.Optional(Type.Integer({ minimum: 256, maximum: 16000 })),
       maxFindings: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })),
@@ -44,28 +160,37 @@ export default function contour(pi: ExtensionAPI): void {
       const target = params.target ?? "staged";
       if (target !== "staged" && target !== "working-tree") throw new Error("Unknown review target");
       const options = { ...(params.maxTokens === undefined ? {} : { maxTokens: params.maxTokens }), ...(params.maxFindings === undefined ? {} : { maxFindings: params.maxFindings }) };
-      const report = await (await getEngine()).review(ctx.cwd, target, options, signal);
+      const report = await review(ctx, params.root, target, options, signal);
       const rendered = renderReport(report, params.maxTokens);
       return { content: [{ type: "text", text: rendered.text }], details: {
-        schemaVersion: report.schemaVersion, id: report.id, root: report.root, target: report.target, baseline: report.baseline,
-        snapshot: report.snapshot, configHash: report.configHash, before: report.before, after: report.after,
+        schemaVersion: report.schemaVersion, id: report.id, root: report.root, agentOrigin: ctx.cwd, workspace: roots.details(),
+        target: report.target, baseline: report.baseline, snapshot: report.snapshot, configHash: report.configHash, before: report.before, after: report.after,
         totalFindings: report.totalFindings, displayed: rendered.displayed, tokens: rendered.tokens,
         coverage: { beforeCount: report.coverage.before.length, afterCount: report.coverage.after.length,
-          examples: report.coverage.after.slice(0, 8), notes: report.coverage.notes },
-        findings: report.findings.slice(0, rendered.displayed),
+          examples: report.coverage.after.slice(0, 8), notes: report.coverage.notes }, findings: report.findings.slice(0, rendered.displayed),
       } };
     },
   });
   pi.registerCommand("contour", {
-    description: "Review structural changes: /contour review [staged|working-tree]",
+    description: "Review [staged|working-tree] [--root path], or status/reset",
     async handler(args, ctx) {
-      const parts = args.trim().split(/\s+/).filter(Boolean);
-      if (parts[0] !== "review" || parts.length > 2 || (parts[1] && !["staged", "working-tree"].includes(parts[1]))) {
-        if (ctx.hasUI) ctx.ui.notify("Usage: /contour review [staged|working-tree]", "info");
+      const trimmed = args.trim();
+      if (trimmed === "status") {
+        await selection.catch(() => {});
+        if (ctx.hasUI) ctx.ui.notify(`Contour · ${roots.list().length}/${roots.capacity} roots · active ${roots.list().length ? roots.target(ctx.cwd) : "none (coordinator idle)"}\nObserved: ${roots.list().join(", ")}\n${roots.details().continuity}${errors.size ? "\nUnavailable: " + [...errors].map(([root,error]) => `${root}: ${error}`).join("; ") : ""}`, "info");
         return;
       }
-      const report = await (await getEngine()).review(ctx.cwd, parts[1] === "working-tree" ? "working-tree" : "staged");
-      pi.sendMessage({ customType: "contour-review", content: renderReport(report).text, display: true }, { triggerTurn: false });
+      if (trimmed === "reset") {
+        await restore(ctx, true);
+        persistRoots(true); return;
+      }
+      const match = /^review(?:\s+(staged|working-tree))?(?:\s+--root\s+(.+))?$/u.exec(trimmed);
+      if (!match) { if (ctx.hasUI) ctx.ui.notify("Usage: /contour review [staged|working-tree] [--root path] | status | reset", "info"); return; }
+      let root = match[2]?.trim();
+      if (root && ((root.startsWith('"') && root.endsWith('"')) || (root.startsWith("'") && root.endsWith("'")))) root = root.slice(1, -1);
+      if (root !== undefined && !root) throw new Error("Root must not be empty");
+      const report = await review(ctx, root, match[1] === "working-tree" ? "working-tree" : "staged");
+      pi.sendMessage({ customType: "contour-review", content: renderReport(report).text, details: { root: report.root, agentOrigin: ctx.cwd, workspace: roots.details() }, display: true }, { triggerTurn: false });
     },
   });
 }

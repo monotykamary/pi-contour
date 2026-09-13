@@ -7,6 +7,10 @@ description: Evidence-first structural review of a coherent code patch. Use at e
 
 Call `contour_review({ target: "staged" })` before reviewing a commit candidate, or `contour_review({ target: "working-tree" })` for unfinished/uncommitted work including non-ignored untracked source files.
 
+- Project selection follows successful native/Fabric path access; use `root: "/projects/service"` for explicit or parallel checkpoints. Omitted roots use the most recently selected project, not the launch directory. `/contour review staged --root "/projects/service"` is equivalent.
+- Native paths still resolve from Pi's cwd. Root labels identify the actual worktree; `agentOrigin` is metadata, not a mutation-author claim. Aliases unify and linked worktrees stay distinct.
+- A 32-root recency ring retires the least recently used project. Branch-local selections survive compaction/reload; old analysis does not. Retirement/re-entry is an observation gap, not an approval. Non-Git targets fail explicitly rather than reviewing another project.
+- `CONTOUR_BACKGROUND=0` disables polling, not selection or explicit reviews. `CONTOUR_MAX_ROOTS` can lower the 32-root cap. Discovery never grants project trust or executes arbitrary program text.
 - Staged means HEAD versus index, including partially staged content. Never substitute live-worktree checks for staged evidence.
 - Read the finding's exact witnesses and coverage gaps before proposing changes.
 - Heat ranks modeled exposure, not defect probability. Complexity and duplication can be intentional.

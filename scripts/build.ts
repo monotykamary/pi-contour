@@ -32,8 +32,10 @@ const entry = Object.keys(outputs).find(path => outputs[path]!.entryPoint === "s
 if (!entry) throw new Error("Missing extension entrypoint");
 visit(entry);
 const startupInputs = [...startup].flatMap(path => Object.keys(outputs[path]!.inputs));
-if (startupInputs.some(path => path.includes("typescript/") || path.includes("pi-fovea/") || path.endsWith("core/engine.ts"))) {
-  throw new Error("Startup must not import the parser, Fovea, or analysis engine");
+const workspaceInputs = ["pi-fovea/src/workspace.ts", "pi-fovea/src/core/roots.ts", "pi-fovea/src/core/asyncutil.ts"];
+if (startupInputs.some(path => path.includes("typescript/") || path.endsWith("core/engine.ts")
+  || (path.includes("pi-fovea/") && !workspaceInputs.some(allowed => path.endsWith(allowed))))) {
+  throw new Error("Startup may import only Fovea's lightweight workspace API, never graph/parser/analysis modules");
 }
 const startupBytes = [...startup].reduce((sum, path) => sum + outputs[path]!.bytes, 0);
 if (startupBytes > 32 * 1024) throw new Error(`Extension static bundle exceeded 32KiB: ${startupBytes}`);

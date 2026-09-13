@@ -39,7 +39,12 @@ export class Lru<T> {
 export function run(command: string, args: string[], cwd: string, options: { input?: string; signal?: AbortSignal; maxBytes?: number; allowFailure?: boolean } = {}): Promise<{ stdout: Buffer; code: number; stderr: string }> {
   options.signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["pipe", "pipe", "pipe"], signal: options.signal });
+    const git = command === "git";
+    // Source observation must not invoke fsmonitor or fetch missing promisor objects.
+    const child = spawn(command, git ? ["-c", "core.fsmonitor=false", ...args] : args, {
+      cwd, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", ...(git ? { GIT_NO_LAZY_FETCH: "1", GIT_ALLOW_PROTOCOL: "", GIT_TERMINAL_PROMPT: "0" } : {}) },
+      stdio: ["pipe", "pipe", "pipe"], signal: options.signal,
+    });
     const chunks: Buffer[] = [];
     let bytes = 0, stderr = "", failure: Error | undefined;
     const timer = setTimeout(() => { failure = new Error(`${command} exceeded 45s deadline`); child.kill("SIGKILL"); }, 45_000);

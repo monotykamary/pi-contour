@@ -14,7 +14,10 @@ const renderFinding = (finding: Finding): string => {
 export function renderReport(report: ReviewReport, maxTokens = 2500): { text: string; tokens: number; displayed: number } {
   if (!Number.isInteger(maxTokens) || maxTokens < 256 || maxTokens > 16000) throw new Error("maxTokens must be 256..16000");
   const gaps = report.coverage.before.length + report.coverage.after.length;
+  const fullRoot = clean(report.root);
+  const root = fullRoot.length > 240 ? fullRoot.slice(0, 110) + "…" + fullRoot.slice(-120) : fullRoot;
   const header = `Contour · ${report.target} · ${report.baseline.slice(0, 12)} → ${report.snapshot.slice(0, 12)}\n`
+    + `Root: ${root}\n`
     + `${report.changed.length} changed source files · ${report.totalFindings} findings · ${report.blockingFindings} policy violations · ${gaps} file/extraction gaps\n`
     + `Δ SLOC ${signed(report.after.sloc - report.before.sloc)}; decisions ${signed(report.after.decisions - report.before.decisions)}; `
     + `erosion ${report.before.erosion.toFixed(3)} → ${report.after.erosion.toFixed(3)}; verbosity ${report.before.verbosity.toFixed(3)} → ${report.after.verbosity.toFixed(3)}\n`

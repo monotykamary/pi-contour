@@ -11,7 +11,7 @@ export class ContourEngine {
   readonly metrics = new MetricsCache();
   readonly stats = { models: 0, reviews: 0, reportHits: 0 };
   private models = new Lru<Model>(2);
-  private reports = new Lru<ReviewReport>(8);
+  private reports = new Lru<ReviewReport>(64, 8 * 1024 * 1024);
   private tail: Promise<unknown> = Promise.resolve();
 
   async review(root: string, target: Target = "staged", input: Partial<AnalysisOptions> = {}, signal?: AbortSignal): Promise<ReviewReport> {
@@ -39,7 +39,7 @@ export class ContourEngine {
       // Analysis can take time. A checkpoint must not describe an index that moved meanwhile.
       const verified = await this.reader.capture(root, target, signal);
       if (verified.before.id !== comparison.before.id || verified.after.id !== comparison.after.id) throw new Error("Repository changed during analysis; retry review");
-      this.reports.set(key, report); this.stats.reviews++;
+      this.reports.set(key, report, JSON.stringify(report).length * 2); this.stats.reviews++;
       return structuredClone(report);
     });
     this.tail = task; return task;
