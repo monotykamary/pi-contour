@@ -1,19 +1,48 @@
 {
   "name": "pi-contour",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Evidence-first structural review of code changes, powered by Fovea's heat-diffusion substrate.",
   "type": "module",
   "license": "MIT",
   "author": "monotykamary",
-  "repository": { "type": "git", "url": "git+https://github.com/monotykamary/pi-contour.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/monotykamary/pi-contour.git"
+  },
   "homepage": "https://github.com/monotykamary/pi-contour#readme",
   "bugs": "https://github.com/monotykamary/pi-contour/issues",
-  "publishConfig": { "access": "public" },
-  "engines": { "node": ">=20" },
-  "keywords": ["pi-package", "pi-extension", "code-review", "heat-diffusion"],
-  "pi": { "extensions": ["./dist/index.mjs"], "skills": ["./skills"], "image": "https://raw.githubusercontent.com/monotykamary/pi-contour/main/media/preview.png" },
-  "bin": { "contour": "dist/cli.mjs" },
-  "files": ["dist", "skills", "README.md", "LICENSE", "docs", "media"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "code-review",
+    "heat-diffusion"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/index.mjs"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "image": "https://raw.githubusercontent.com/monotykamary/pi-contour/main/media/preview.png"
+  },
+  "bin": {
+    "contour": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "docs",
+    "media"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -38,6 +67,12 @@
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },
-  "peerDependencies": { "typebox": "*" },
-  "peerDependenciesMeta": { "typebox": { "optional": true } }
+  "peerDependencies": {
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "typebox": {
+      "optional": true
+    }
+  }
 }
