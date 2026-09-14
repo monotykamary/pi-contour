@@ -30,8 +30,8 @@ This removes the heavy startup dependency—not all overhead. Pi still reads the
 
 1. `bun run check`: source typecheck, behavioral suite, knip.
 2. `bun run build`: bundled dependency closure and static-startup gate.
-3. `bun run smoke`: copied, dependency-free CLI; staged/worktree isolation; advisory and policy-enforced real commits.
-4. `bun run verify:package`: archive contents, production-only npm and Git-layout installations, actual Pi resource loading, SDK session persistence, disjoint automatic selection, and lazy review from the installed package.
+3. `bun run smoke`: copied, dependency-free CLI; reported version; staged/worktree isolation; advisory and policy-enforced real commits.
+4. `bun run verify:package`: archive contents, production-only npm and Git-layout installations, matching CLI version reporting, actual Pi resource loading, SDK session persistence, disjoint automatic selection, and lazy review from the installed package.
 5. CI regenerates both `dist/` and `media/cover.svg` and rejects uncommitted drift.
 
 Publish a new shared API in Fovea before updating Contour's pinned registry dependency. Reinstall/update the lock, rerun these checks, and commit source and distribution together. `bun publish` then runs the same prepack build. Runtime users never invoke the maintainer build chain.

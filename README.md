@@ -107,6 +107,7 @@ contour review                      # HEAD → index (default)
 contour review --working-tree       # includes nonignored untracked sources
 contour review --json               # structured evidence + coverage
 contour review --root /path/to/repo --max-tokens 1000
+contour --version                   # version of the distribution on PATH
 ```
 
 **The index is the commit candidate—not the live worktree.** Partially staged files and unchanged dependencies come from pinned Git blobs. Unborn HEAD uses an empty baseline; unmerged indexes are errors. Captures are checked for concurrent drift and reconciled again before returning a fresh report. A moving repository causes a retry error, not approval.

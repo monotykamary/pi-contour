@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const dist = join(root, "dist");
+const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version: string };
 // Only this package's generated artifacts are removed, regardless of invoking cwd.
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
@@ -14,6 +15,7 @@ const result = await build({
   entryPoints: { index: "src/index.ts", cli: "src/cli.ts" }, outdir: dist, outExtension: { ".js": ".mjs" },
   bundle: true, splitting: true, format: "esm", platform: "node", target: "node20", sourcemap: false, minify: true,
   preserveSymlinks: true, metafile: true,
+  define: { __CONTOUR_VERSION__: JSON.stringify(manifest.version) },
   external: ["typebox", "@earendil-works/pi-coding-agent"],
   banner: { js: 'import { createRequire as __contourCreateRequire } from "node:module"; import { fileURLToPath as __contourFileURLToPath } from "node:url"; import { dirname as __contourDirname } from "node:path"; const require = __contourCreateRequire(import.meta.url); const __filename = __contourFileURLToPath(import.meta.url); const __dirname = __contourDirname(__filename);' },
   logLevel: "warning",

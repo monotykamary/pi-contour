@@ -10,10 +10,20 @@ import { optionsFor } from "./core/review.js";
 import { digest } from "./core/util.js";
 import type { BoundaryPolicy, Target } from "./core/types.js";
 
+// The distribution build bakes the manifest version in; a source checkout reads the manifest itself.
+declare const __CONTOUR_VERSION__: string | undefined;
+async function packageVersion(): Promise<string> {
+  if (typeof __CONTOUR_VERSION__ === "string") return __CONTOUR_VERSION__;
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version?: unknown };
+  if (typeof manifest.version !== "string" || !manifest.version) throw new Error("package.json does not declare a version");
+  return manifest.version;
+}
+
 const USAGE = `contour review [--staged|--working-tree] [--json] [--root DIR]
                [--max-tokens N] [--max-findings N] [--policy FILE] [--checkpoint]
 contour hook install [--root DIR] [--policy FILE]
 contour hook uninstall [--root DIR]
+contour --version
 
 Reviews compare HEAD with an immutable target snapshot. No source or index writes.
 Exit 0: advisory; 2: explicit boundary policy violations; 1: analysis/usage failure.
@@ -23,6 +33,7 @@ Hooks are opt-in, never overwrite existing hooks, and do not intercept shell com
 export async function main(argv: string[], io = { out: (text: string) => process.stdout.write(text), error: (text: string) => process.stderr.write(text) }): Promise<number> {
   if (!argv.length || argv.includes("--help") || argv[0] === "help") { io.out(USAGE); return 0; }
   try {
+    if (argv.includes("--version")) { io.out(`contour ${await packageVersion()}\n`); return 0; }
     const args = [...argv], command = args.shift();
     const action = command === "hook" ? args.shift() : undefined;
     let root = process.cwd(), target: Target = "staged", explicitTarget = false, json = false, checkpoint = false, policyFile: string | undefined;

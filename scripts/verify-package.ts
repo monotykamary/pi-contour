@@ -53,6 +53,8 @@ try {
     }
     const cli = JSON.parse((await run(process.execPath, [join(installed, "dist/cli.mjs"), "review", "--root", repository, "--json"], directory)).stdout);
     assert.equal(cli.after.decisions, 12); assert.equal(cli.target, "staged");
+    const reported = (await run(process.execPath, [join(installed, "dist/cli.mjs"), "--version"], directory)).stdout.trim();
+    assert.equal(reported, `contour ${manifest.version}`);
     const loader = new DefaultResourceLoader({
       cwd: directory, agentDir: join(root, `agent-${mode}`), settingsManager: SettingsManager.inMemory(),
       additionalExtensionPaths: [installed], noExtensions: true, noSkills: true,
@@ -84,7 +86,7 @@ try {
     } finally {
       for (const handler of extension.handlers.get("session_shutdown") ?? []) await handler({ type: "session_shutdown" }, context);
     }
-    observations.push({ mode, cli: true, piLoader: true, lazyToolReview: true, disjointAutoSelection: true, sessionPersistence: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
+    observations.push({ mode, reportedVersion: reported, cli: true, piLoader: true, lazyToolReview: true, disjointAutoSelection: true, sessionPersistence: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
   }
   console.log(JSON.stringify({ standalone: true, archiveFiles: packed.files.length, installed: observations }));
 } finally {

@@ -54,6 +54,12 @@ describe("public interfaces", () => {
     expect(await main(["review", "--root", root, "--checkpoint"], clean.io)).toBe(0); expect(clean.values.out).toBe("");
     const bad = output(); expect(await main(["review", "--made-up"], bad.io)).toBe(1); expect(bad.values.error).toContain("Unknown");
   });
+  it("reports the source-checkout version and lists the flag in usage", async () => {
+    const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    const version = output(); expect(await main(["--version"], version.io)).toBe(0);
+    expect(version.values.out).toBe(`contour ${manifest.version}\n`); expect(version.values.error).toBe("");
+    const both = output(); expect(await main(["--version", "--help"], both.io)).toBe(0); expect(both.values.out).toContain("contour --version");
+  });
   it("installs only on explicit request and never overwrites existing hooks or symlinks", async () => {
     const root = await repo(), cli = join(root, "fake ' cli.mjs"), hook = join(root, ".git/hooks/pre-commit");
     await put(root, "fake ' cli.mjs", "process.exitCode = 1;");

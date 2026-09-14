@@ -15,6 +15,10 @@ try {
   const cli = join(standalone, "dist/cli.mjs"), bin = join(standalone, "contour");
   await symlink(cli, bin);
   assert.match((await run(bin, ["--help"], repository)).stdout.toString(), /contour review/);
+  // The copied distribution reports its version with no manifest alongside it.
+  const manifest = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as { version: string };
+  const reported = (await run(bin, ["--version"], repository)).stdout.toString();
+  assert.equal(reported, `contour ${manifest.version}\n`);
   const git = (args: string[], allowFailure = false) => run("git", args, repository, { allowFailure });
   const contour = (args: string[], allowFailure = false) => run(process.execPath, [cli, ...args], repository, { allowFailure });
   await git(["init", "-b", "main"]); await git(["config", "user.name", "Contour smoke"]); await git(["config", "user.email", "smoke@example.invalid"]);
@@ -49,5 +53,5 @@ try {
   const tools: string[] = [], commands: string[] = [];
   extension({ on() {}, registerTool(tool: { name: string }) { tools.push(tool.name); }, registerCommand(name: string) { commands.push(name); } });
   assert.deepEqual(tools, ["contour_review"]); assert.deepEqual(commands, ["contour"]);
-  console.log(JSON.stringify({ standaloneCli: true, symlinkedBin: true, stagedIsolation: true, reviewReadOnly: true, advisoryCommit: true, policyCommitBlocked: true, extensionRegistrations: { tools, commands } }));
+  console.log(JSON.stringify({ standaloneCli: true, symlinkedBin: true, reportedVersion: reported.trim(), stagedIsolation: true, reviewReadOnly: true, advisoryCommit: true, policyCommitBlocked: true, extensionRegistrations: { tools, commands } }));
 } finally { await rm(root, { recursive: true, force: true }); }
