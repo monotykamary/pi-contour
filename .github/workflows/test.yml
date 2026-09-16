@@ -10,14 +10,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The affected-test selection diffs the push range or the pull-request
+          # base, so that base commit has to be present in history.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: bun install --frozen-lockfile
-      - run: bun run check
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Type check
+        run: bun run typecheck
+      - name: Affected tests
+        env:
+          # Pull requests compare against the target branch; pushes compare
+          # against the tip they replaced. An unusable base selects nothing.
+          PI_TEST_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: bun run test:affected
+      - name: Entrypoint smoke floor
+        # Curated startup, background, render, metrics, and docs floor (about
+        # four seconds) so a push the selection did not cover still runs.
+        run: bun run test:smoke
+      - name: Dead code
+        run: bun run lint:dead
       - run: bun run build
       - run: bun run cover
       - run: git diff --exit-code -- dist media
