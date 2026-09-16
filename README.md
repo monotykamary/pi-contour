@@ -230,7 +230,8 @@ Exit codes: **0** advisory · **2** explicit boundary violation · **1** operati
 git clone https://github.com/monotykamary/pi-contour.git
 cd pi-contour
 bun install --frozen-lockfile
-bun run check             # typecheck + full Vitest suite + knip
+bun run check:fast        # typecheck + tests your working tree affects
+bun run test:smoke        # curated entrypoint floor, seconds
 bun run build             # bundle, license notices, static-startup gate
 bun run smoke             # standalone bundles, real disposable commits
 bun run verify:package    # production-only install + actual Pi loader

@@ -28,7 +28,7 @@ This removes the heavy startup dependency—not all overhead. Pi still reads the
 
 ## Release verification
 
-1. `bun run check`: source typecheck, behavioral suite, knip.
+1. `bunx vitest run`, `bun run typecheck`, and `bun run lint:dead`: the full behavioral suite and dead-code gate at release time. Routine changes use the change-scoped `bun run check:fast` and `bun run test:smoke` instead.
 2. `bun run build`: bundled dependency closure and static-startup gate.
 3. `bun run smoke`: copied, dependency-free CLI; reported version; staged/worktree isolation; advisory and policy-enforced real commits.
 4. `bun run verify:package`: archive contents, production-only npm and Git-layout installations, matching CLI version reporting, actual Pi resource loading, SDK session persistence, disjoint automatic selection, and lazy review from the installed package.

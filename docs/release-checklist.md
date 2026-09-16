@@ -2,7 +2,7 @@
 
 Run these before publishing a version:
 
-- `bun run check`: all behavioral tests, typecheck, and dead-code gate.
+- `bunx vitest run`, `bun run typecheck`, `bun run lint:dead`: the full behavioral suite and dead-code gate at release time. Routine changes use `bun run check:fast`.
 - `bun run build`: regenerate bundled CLI/extension and license notices; pass the transitive static-startup gate.
 - `bun run smoke`: isolated built CLI and real advisory/policy commit probes.
 - `bun run verify:package`: npm archive contents, production npm/Bun Git layouts, actual Pi loading, and installed lazy review. No sibling checkout or unexpected host/compiler install.
