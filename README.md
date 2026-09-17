@@ -95,7 +95,7 @@ In Pi:
 For the agent:
 
 ```ts
-contour_review({ target: "staged" }) // most recently selected project
+contour_review({ target: "staged" }) // the session cwd's own project
 contour_review({ root: "/projects/service", target: "working-tree" })
 contour_review({ target: "working-tree", maxTokens: 2500, maxFindings: 8 })
 ```

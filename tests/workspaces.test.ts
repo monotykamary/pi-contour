@@ -32,7 +32,7 @@ describe("roaming review workspaces",()=>{
     await expect(access(sentinel)).rejects.toThrow();
   });
 
-  it("follows disjoint successful access instead of cwd, preserving each Git index",async()=>{
+  it("follows disjoint successful access instead of a coordinator cwd, preserving each Git index",async()=>{
     vi.stubEnv("CONTOUR_BACKGROUND","0"); const origin=await parent(),h=host(origin);
     const a=await realpath(await repo({"a.ts":"export const a=1;"})),b=await realpath(await repo({"a.ts":"export const a=1;"}));
     await put(a,"a.ts",complex("alpha",12));await git(a,["add","."]);await put(a,"a.ts",complex("live",20));
@@ -66,6 +66,16 @@ describe("roaming review workspaces",()=>{
       expect((await h.review()).details.root).toBe(actual);
       const unrelated=await parent();await put(unrelated,"a.ts","export const a=1;");await h.read(unrelated);
       await expect(h.review()).rejects.toThrow("Git worktree"); // Never silently review the previous Git project.
+    } finally {await h.emit("session_shutdown");}
+  });
+  it("prefers the session cwd's own project over the recency ring",async()=>{
+    vi.stubEnv("CONTOUR_BACKGROUND","0");const cwd=await realpath(await repo({"a.ts":"export const a=1;"})),sibling=await realpath(await repo({"a.ts":"export const a=1;"})),h=host(cwd);
+    try {
+      await put(sibling,"a.ts",complex("sibling",12));await git(sibling,["add","."]);
+      await h.read(sibling); // The ring's most recent root is the sibling, not cwd.
+      expect((await h.review()).details.root).toBe(cwd);
+      const explicit=await h.review({root:sibling});expect(explicit.details.root).toBe(sibling);
+      expect(explicit.details.workspace.observedRoots).toContain(cwd);
     } finally {await h.emit("session_shutdown");}
   });
   it("normalizes aliases and subdirectories without collapsing linked worktrees",async()=>{

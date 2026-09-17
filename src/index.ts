@@ -28,11 +28,17 @@ export default function contour(pi: ExtensionAPI): void {
     if (!force && savedRevision === roots.revision) return;
     pi.appendEntry?.("pi-contour-workspace", roots.snapshot()); savedRevision = roots.revision;
   };
+  // A manual call means "the project I am in": the session cwd's own project
+  // wins over the recency ring. The ring stays the fallback for a coordinator
+  // cwd, where a review needs a Git worktree and the most recently accessed
+  // project is the only available subject.
   const selectRoot = (input: string | undefined, ctx: ExtensionContext, peer = false, requireGit = false): Promise<string> => {
     const generation = epoch;
     const task = selection.catch(() => {}).then(async () => {
       if (epoch !== generation) throw new Error("Contour session changed during root selection");
-      const requested = roots.target(ctx.cwd, input);
+      const requested = input === undefined
+        ? (await discovery.discover(ctx.cwd, "."))?.root ?? roots.target(ctx.cwd)
+        : roots.target(ctx.cwd, input);
       const project = await discovery.discover(ctx.cwd, requested);
       if (epoch !== generation) throw new Error("Contour session changed during root discovery");
       if (requireGit && !project?.git) throw new Error(`Contour needs a Git worktree: ${requested}. Access a project file or pass root explicitly.`);
@@ -147,11 +153,11 @@ export default function contour(pi: ExtensionAPI): void {
 
   pi.registerTool({
     name: "contour_review", label: "Contour review",
-    description: "Review HEAD against the staged patch (default) or working tree. Uses the most recently accessed project; root explicitly selects a Git project anywhere. Root and agent origin are reported separately. Bounded structural evidence and multiscale exposure, not a quality score or correctness approval. Read-only; JS/TS metrics, explicit coverage gaps. Budget estimate: 4 characters/token.",
+    description: "Review HEAD against the staged patch (default) or working tree. Uses the session cwd's own Git project, falling back to the most recently accessed project outside one; root explicitly selects a Git project anywhere. Root and agent origin are reported separately. Bounded structural evidence and multiscale exposure, not a quality score or correctness approval. Read-only; JS/TS metrics, explicit coverage gaps. Budget estimate: 4 characters/token.",
     promptSnippet: "Evidence-first structural review of a coherent patch",
-    promptGuidelines: ["contour_review follows successful project access; pass root explicitly for parallel or ambiguous multi-project checkpoints."],
+    promptGuidelines: ["contour_review defaults to the session cwd's own project and falls back to successful project access in a coordinator cwd; pass root explicitly for parallel or ambiguous multi-project checkpoints."],
     parameters: Type.Object({
-      root: Type.Optional(Type.String({ description: "Project path, absolute or relative to the invoking tool context. Omitted uses the most recently accessed project." })),
+      root: Type.Optional(Type.String({ description: "Project path, absolute or relative to the invoking tool context. Omitted uses the session cwd's own project, falling back to the most recently accessed project." })),
       target: Type.Optional(Type.String({ enum: ["staged", "working-tree"], description: "staged compares HEAD to the index, never live worktree content" })),
       maxTokens: Type.Optional(Type.Integer({ minimum: 256, maximum: 16000 })),
       maxFindings: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })),
