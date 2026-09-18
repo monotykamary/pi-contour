@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-import { readFile, mkdir, writeFile, realpath } from "node:fs/promises";
-import { resolve, dirname, join } from "node:path";
-import { tmpdir } from "node:os";
+import { readFile, realpath } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ContourEngine } from "./core/engine.js";
 import { renderReport } from "./core/render.js";
 import { installHook, uninstallHook } from "./core/hook.js";
 import { optionsFor } from "./core/review.js";
-import { digest } from "./core/util.js";
+import { temporaryStorage } from "./core/storage.js";
 import type { BoundaryPolicy, Target } from "./core/types.js";
 
 // The distribution build bakes the manifest version in; a source checkout reads the manifest itself.
@@ -80,10 +79,10 @@ export async function main(argv: string[], io = { out: (text: string) => process
       let disclose = true;
       if (checkpoint && !json) {
         disclose = report.totalFindings > 0 || report.coverage.before.length > 0 || report.coverage.after.length > 0;
-        const path = join(tmpdir(), `pi-contour-${process.getuid?.() ?? "user"}`, `checkpoint-${digest(report.root)}.txt`);
         // Suppression affects automatic advisory display only, never enforcement or explicit review.
-        try { if (!report.blockingFindings && (await readFile(path, "utf8")) === report.id) disclose = false; } catch {}
-        if (disclose) { try { await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await writeFile(path, report.id, { mode: 0o600 }); } catch {} }
+        const previous = await temporaryStorage.read(report.root, "checkpoint");
+        if (!report.blockingFindings && previous === report.id) disclose = false;
+        if (disclose) await temporaryStorage.write(report.root, "checkpoint", report.id);
       }
       if (disclose) io.out(json ? JSON.stringify(report, null, 2) + "\n" : renderReport(report, maxTokens).text + "\n");
       return report.blockingFindings ? 2 : 0;

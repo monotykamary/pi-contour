@@ -1,8 +1,5 @@
 import ts from "typescript";
-import { mkdir, readFile, rename, writeFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
+import { temporaryStorage, type TemporaryStorage } from "./storage.js";
 import { digest, Lru } from "./util.js";
 import type { Callable, FileAnalysis, Pattern, SourceFile } from "./types.js";
 
@@ -118,17 +115,19 @@ export class MetricsCache {
   private cache = new Lru<FileAnalysis>(4000, 48 * 1024 * 1024);
   readonly stats = { parses: 0, hits: 0, diskHits: 0 };
   private loaded = new Lru<boolean>(2);
-  private saved = new Lru<number>(2);
-  private cachePath(root: string): string { return join(tmpdir(), `pi-contour-${process.getuid?.() ?? "user"}`, `facts-${digest(root)}.json`); }
+  private saved = new Lru<string>(2);
+  constructor(private storage: TemporaryStorage = temporaryStorage) {}
+  private key(source: SourceFile): string { return `${METRICS_VERSION}\0${source.file}\0${source.hash}`; }
   async hydrate(root: string): Promise<void> {
-    if (this.loaded.get(root)) return;
+    if (this.loaded.get(root)) { await this.storage.housekeep(root); return; }
     this.loaded.set(root, true);
     try {
-      if ((await stat(this.cachePath(root))).size > 64 * 1024 * 1024) return;
-      const text = await readFile(this.cachePath(root), "utf8");
-      if (text.length > 64 * 1024 * 1024) return;
-      const stored = JSON.parse(text) as { version: string; checksum: string; entries: Array<[string, FileAnalysis]> };
-      if (stored.version !== METRICS_VERSION || !Array.isArray(stored.entries) || stored.entries.length > 4000
+      const text = await this.storage.read(root, "facts");
+      if (!text) return;
+      const stored = JSON.parse(text) as { format: number; root: string; version: string; checksum: string; entries: Array<[string, FileAnalysis]> };
+      // Old global snapshots are deliberately regenerated, not replicated into another root.
+      if (stored.format !== 1 || stored.root !== digest(root) || stored.version !== METRICS_VERSION
+        || !Array.isArray(stored.entries) || stored.entries.length > 4000
         || digest(JSON.stringify(stored.entries)) !== stored.checksum) return;
       for (const [key, value] of stored.entries) {
         if (!key.startsWith(METRICS_VERSION + "\0") || !value.facts || !Array.isArray(value.callables) || !Array.isArray(value.sourceLines) || !Array.isArray(value.diagnostics)) continue;
@@ -136,19 +135,20 @@ export class MetricsCache {
       }
     } catch { /* Cache misses/corruption affect speed, never the analysis outcome. */ }
   }
-  async persist(root: string): Promise<void> {
-    if (!this.stats.parses || this.saved.get(root) === this.stats.parses) return;
+  async persist(root: string, sources: Iterable<SourceFile>): Promise<void> {
     try {
-      const entries = this.cache.snapshot();
-      const data = JSON.stringify({ version: METRICS_VERSION, checksum: digest(JSON.stringify(entries)), entries });
-      const path = this.cachePath(root), temp = `${path}.${randomUUID()}.tmp`;
-      await mkdir(join(path, ".."), { recursive: true, mode: 0o700 });
-      await writeFile(temp, data, { mode: 0o600 }); await rename(temp, path);
-      this.saved.set(root, this.stats.parses);
+      // Explicit immutable comparison membership also covers model hits and shared content.
+      // No per-root membership map can grow or lose associations after memory-cache eviction.
+      const keys = new Set(Array.from(sources, source => this.key(source)));
+      const entries = this.cache.snapshot().filter(([key]) => keys.has(key)).sort(([a], [b]) => a.localeCompare(b));
+      const checksum = digest(JSON.stringify(entries));
+      if (this.saved.get(root) === checksum) { await this.storage.housekeep(root); return; }
+      const data = JSON.stringify({ format: 1, root: digest(root), version: METRICS_VERSION, checksum, entries });
+      if (await this.storage.write(root, "facts", data)) this.saved.set(root, checksum);
     } catch { /* An unwritable cache never invalidates completed evidence. */ }
   }
   get(source: SourceFile): FileAnalysis {
-    const key = `${METRICS_VERSION}\0${source.file}\0${source.hash}`;
+    const key = this.key(source);
     const cached = this.cache.get(key);
     if (cached) { this.stats.hits++; return cached; }
     const value = extractMetrics(source);

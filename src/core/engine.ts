@@ -20,9 +20,9 @@ export class ContourEngine {
       signal?.throwIfAborted();
       const comparison = await this.reader.capture(root, target, signal);
       const key = `${comparison.root}\0${target}\0${comparison.before.revision}\0${comparison.before.id}\0${comparison.after.id}\0${configId(options)}`;
+      await this.metrics.hydrate(comparison.root);
       const hit = this.reports.get(key);
       if (hit) { this.stats.reportHits++; return structuredClone(hit); }
-      await this.metrics.hydrate(comparison.root);
       const models: Model[] = [];
       for (const snapshot of [comparison.before, comparison.after]) {
         // Graph identity depends on extraction content, not staging metadata. Identical
@@ -34,7 +34,7 @@ export class ContourEngine {
       }
       const report = await reviewModels(comparison, models[0]!, models[1]!, options, signal);
       signal?.throwIfAborted();
-      await this.metrics.persist(comparison.root);
+      await this.metrics.persist(comparison.root, [...comparison.before.files.values(), ...comparison.after.files.values()]);
       signal?.throwIfAborted();
       // Analysis can take time. A checkpoint must not describe an index that moved meanwhile.
       const verified = await this.reader.capture(root, target, signal);
