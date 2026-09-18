@@ -1,12 +1,10 @@
 {
-  "staticBytes": 19179,
+  "staticBytes": 16725,
   "staticFiles": [
-    "dist/chunk-72MSRXBI.mjs",
-    "dist/chunk-RZ4I33MA.mjs",
+    "dist/chunk-HXQEELCN.mjs",
+    "dist/chunk-WUMNOO5F.mjs",
     "dist/index.mjs"
   ],
   "analysis": "lazy-import",
-  "hostExternal": [
-    "typebox"
-  ]
+  "hostExternal": []
 }

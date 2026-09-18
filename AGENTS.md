@@ -26,6 +26,27 @@ did not cover. `bun run lint:dead` costs under a second and stays in CI.
 
 Then `bun run build`, `bun run smoke`, and `bun run verify:package` when entrypoints/packaging change. No build alone counts as completion. Commit regenerated `dist/` alongside source: production-only Git installs require it. `bun run cover` regenerates the standalone SVG.
 
+## Startup: external is not necessarily host-shared
+
+Warm jiti caches avoid transpilation, not V8 compilation. Native ESM can bypass
+jiti's virtual host modules: an external TypeBox import previously compiled a
+second schema-library graph and dominated the tiny Contour entrypoint. Register
+plain, typed JSON Schema here; Pi still validates it normally. Use `import type`
+for host types. Keep analysis and report rendering behind actual review calls.
+
+Guard the **entire transitive static bundle**, including shared chunks and
+external package edges, not just `dist/index.mjs`. The build enforces a 20KiB
+ceiling and zero non-builtin static imports. Do not raise these budgets to make
+a regression pass. Never relocate heavy initialization into `session_start`,
+an idle poll, an immediately invoked async function, or a zero-delay timer.
+
+Validate idle startup and real first-use/cleanup behavior, then rebuild and run
+`smoke` and `verify:package`. Source-only tests cannot catch bundle hoisting or
+native-loader alias bypasses. From the sibling Fabric checkout, run
+`bun run benchmark:startup ../pi-contour` for fresh-process import/registration
+medians with warm filesystem caches. A repeated import in one process measures
+cache hits, not boot; use structural checks rather than CI timing thresholds.
+
 ## Invariants
 
 - Commit reviews use HEAD versus the Git index, never live worktree bytes.

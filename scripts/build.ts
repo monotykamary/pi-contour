@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { mkdir, readFile, writeFile, chmod, rm } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { createRequire, isBuiltin } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
@@ -40,8 +40,12 @@ if (startupInputs.some(path => path.includes("typescript/") || path.endsWith("co
   throw new Error("Startup may import only Fovea's lightweight workspace API, never graph/parser/analysis modules");
 }
 const startupBytes = [...startup].reduce((sum, path) => sum + outputs[path]!.bytes, 0);
-if (startupBytes > 32 * 1024) throw new Error(`Extension static bundle exceeded 32KiB: ${startupBytes}`);
-await writeFile(join(dist, "startup.json"), JSON.stringify({ staticBytes: startupBytes, staticFiles: [...startup].sort(), analysis: "lazy-import", hostExternal: ["typebox"] }, null, 2) + "\n");
+if (startupBytes > 20 * 1024) throw new Error(`Extension static bundle exceeded 20KiB: ${startupBytes}`);
+const hostExternal = [...new Set([...startup].flatMap(path => outputs[path]!.imports
+  .filter(dependency => dependency.external && dependency.kind === "import-statement" && !isBuiltin(dependency.path))
+  .map(dependency => dependency.path)))];
+if (hostExternal.length) throw new Error(`Startup must not compile external package graphs: ${hostExternal.join(", ")}`);
+await writeFile(join(dist, "startup.json"), JSON.stringify({ staticBytes: startupBytes, staticFiles: [...startup].sort(), analysis: "lazy-import", hostExternal }, null, 2) + "\n");
 await chmod(join(dist, "cli.mjs"), 0o755);
 const fovea = dirname(require.resolve("pi-fovea/substrate"));
 const typescript = dirname(require.resolve("typescript/package.json"));

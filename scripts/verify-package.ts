@@ -80,13 +80,16 @@ try {
         content: [], details: undefined, isError: false,
       }, context);
       assert.ok(session.getBranch().some(entry => entry.type === "custom" && entry.customType === "pi-contour-workspace"));
-      const result = await extension.tools.get("contour_review")!.definition.execute("package-probe", { target: "staged" }, undefined, undefined, context);
+      // Access enrolls the project, but the installation cwd has its own
+      // manifest: an unrooted review must not silently switch to the ring.
+      await assert.rejects(extension.tools.get("contour_review")!.definition.execute("enrolled-default", { target: "staged" }, undefined, undefined, context), /Git worktree/);
+      const result = await extension.tools.get("contour_review")!.definition.execute("package-probe", { root: repository, target: "staged" }, undefined, undefined, context);
       assert.ok(result.content.some(content => content.type === "text" && content.text.includes("complexity")));
       assert.equal((result.details as { root: string }).root, await realpath(repository));
     } finally {
       for (const handler of extension.handlers.get("session_shutdown") ?? []) await handler({ type: "session_shutdown" }, context);
     }
-    observations.push({ mode, reportedVersion: reported, cli: true, piLoader: true, lazyToolReview: true, disjointAutoSelection: true, sessionPersistence: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
+    observations.push({ mode, reportedVersion: reported, cli: true, piLoader: true, lazyToolReview: true, disjointEnrollment: true, cwdDefaultPreserved: true, sessionPersistence: true, loaderMs: +loadMs.toFixed(2), sessionStartMs: +sessionStartMs.toFixed(3) });
   }
   console.log(JSON.stringify({ standalone: true, archiveFiles: packed.files.length, installed: observations }));
 } finally {

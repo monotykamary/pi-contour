@@ -1,10 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { ExecutionRoots, ProjectDiscovery, accessedPaths, WORKSPACE_ACCESS_EVENT, peerWorkspaceRoot, latestWorkspaceEntry, envInt } from "pi-fovea/workspace";
 import type { ContourEngine } from "./core/engine.js";
 import type { AnalysisOptions, Target } from "./core/types.js";
 import { SilentObserver } from "./core/background.js";
-import { renderReport } from "./core/render.js";
 
 export default function contour(pi: ExtensionAPI): void {
   const roots = new ExecutionRoots(envInt("CONTOUR_MAX_ROOTS", 32, 1, 32));
@@ -156,17 +154,24 @@ export default function contour(pi: ExtensionAPI): void {
     description: "Review HEAD against the staged patch (default) or working tree. Uses the session cwd's own Git project, falling back to the most recently accessed project outside one; root explicitly selects a Git project anywhere. Root and agent origin are reported separately. Bounded structural evidence and multiscale exposure, not a quality score or correctness approval. Read-only; JS/TS metrics, explicit coverage gaps. Budget estimate: 4 characters/token.",
     promptSnippet: "Evidence-first structural review of a coherent patch",
     promptGuidelines: ["contour_review defaults to the session cwd's own project and falls back to successful project access in a coordinator cwd; pass root explicitly for parallel or ambiguous multi-project checkpoints."],
-    parameters: Type.Object({
-      root: Type.Optional(Type.String({ description: "Project path, absolute or relative to the invoking tool context. Omitted uses the session cwd's own project, falling back to the most recently accessed project." })),
-      target: Type.Optional(Type.String({ enum: ["staged", "working-tree"], description: "staged compares HEAD to the index, never live worktree content" })),
-      maxTokens: Type.Optional(Type.Integer({ minimum: 256, maximum: 16000 })),
-      maxFindings: Type.Optional(Type.Integer({ minimum: 1, maximum: 32 })),
-    }, { additionalProperties: false }),
+    // Pi accepts JSON Schema directly. A runtime TypeBox import from an ESM
+    // bundle can bypass jiti's host aliases and compile a second schema library.
+    parameters: {
+      type: "object",
+      properties: {
+        root: { type: "string", description: "Project path, absolute or relative to the invoking tool context. Omitted uses the session cwd's own project, falling back to the most recently accessed project." },
+        target: { type: "string", enum: ["staged", "working-tree"], description: "staged compares HEAD to the index, never live worktree content" },
+        maxTokens: { type: "integer", minimum: 256, maximum: 16000 },
+        maxFindings: { type: "integer", minimum: 1, maximum: 32 },
+      },
+      additionalProperties: false,
+    } as const,
     async execute(_id, params, signal, _update, ctx) {
       const target = params.target ?? "staged";
       if (target !== "staged" && target !== "working-tree") throw new Error("Unknown review target");
       const options = { ...(params.maxTokens === undefined ? {} : { maxTokens: params.maxTokens }), ...(params.maxFindings === undefined ? {} : { maxFindings: params.maxFindings }) };
       const report = await review(ctx, params.root, target, options, signal);
+      const { renderReport } = await import("./core/render.js");
       const rendered = renderReport(report, params.maxTokens);
       return { content: [{ type: "text", text: rendered.text }], details: {
         schemaVersion: report.schemaVersion, id: report.id, root: report.root, agentOrigin: ctx.cwd, workspace: roots.details(),
@@ -196,6 +201,7 @@ export default function contour(pi: ExtensionAPI): void {
       if (root && ((root.startsWith('"') && root.endsWith('"')) || (root.startsWith("'") && root.endsWith("'")))) root = root.slice(1, -1);
       if (root !== undefined && !root) throw new Error("Root must not be empty");
       const report = await review(ctx, root, match[1] === "working-tree" ? "working-tree" : "staged");
+      const { renderReport } = await import("./core/render.js");
       pi.sendMessage({ customType: "contour-review", content: renderReport(report).text, details: { root: report.root, agentOrigin: ctx.cwd, workspace: roots.details() }, display: true }, { triggerTurn: false });
     },
   });

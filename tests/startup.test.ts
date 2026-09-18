@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Value } from "typebox/value";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,6 +44,15 @@ describe("many-root scheduling", () => {
 });
 
 describe("lazy, silent coordinator startup", () => {
+  it("retains optional fields, enum, bounds, and unknown-key rejection with plain JSON Schema", () => {
+    const { api } = registered();
+    const schema = api.registerTool.mock.calls[0]![0].parameters;
+    expect(Value.Check(schema, {})).toBe(true);
+    expect(Value.Check(schema, { root: "/project", target: "working-tree", maxTokens: 256, maxFindings: 32 })).toBe(true);
+    for (const invalid of [{ target: "other" }, { maxTokens: 255 }, { maxTokens: 16001 }, { maxFindings: 0 }, { maxFindings: 33 }, { root: 42 }, { extra: true }]) {
+      expect(Value.Check(schema, invalid)).toBe(false);
+    }
+  });
   it("never imports analysis or probes the launch directory on idle polls", async () => {
     vi.useFakeTimers(); vi.stubEnv("CONTOUR_BACKGROUND", "1"); const ext=registered();
     expect(mocks.imported).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
